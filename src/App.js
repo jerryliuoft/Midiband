@@ -6,6 +6,7 @@ import WebAudioFontPlayer from "webaudiofont";
 
 const App = () => {
   const [currentMidi, setCurrentMidi] = useState(null);
+  const [playing, setPlaying] = useState(false);
   const fileSelectRef = useRef(null); // This is used to reset the file after uploading
 
   const AudioContextFunc = window.AudioContext || window.webkitAudioContext;
@@ -65,7 +66,8 @@ const App = () => {
     let currentTime = songStart;
     let currentSongTime = 0;
     let nextStepTime = songStart;
-    while (currentTime < songStart + song.duration) {
+
+    const playingId = setInterval(() => {
       if (currentTime > nextStepTime - stepDuration) {
         sendNotes(
           song,
@@ -78,7 +80,12 @@ const App = () => {
         nextStepTime += stepDuration;
       }
       currentTime = audioContext.currentTime;
-    }
+
+      if (currentTime > songStart + song.duration) {
+        clearInterval(playing);
+      }
+    }, 22);
+    setPlaying(playingId);
   };
 
   // Helper to play the note at certain time frame, we can't load all of the notes at once because it won't play either memory issue or w/e
