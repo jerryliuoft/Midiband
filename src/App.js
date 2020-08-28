@@ -6,15 +6,29 @@ import WebAudioFontPlayer from "webaudiofont";
 
 const App = () => {
   const [currentMidi, setCurrentMidi] = useState(null);
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState(false); //tracks the id for current instance
   const fileSelectRef = useRef(null); // This is used to reset the file after uploading
 
-  const AudioContextFunc = window.AudioContext || window.webkitAudioContext;
-  const audioContext = new AudioContextFunc();
-  const player = new WebAudioFontPlayer();
-  const reverberator = player.createReverberator(audioContext);
-  reverberator.output.connect(audioContext.destination);
-  const input = reverberator.input;
+  const [debugText, setDebug] = useState("nothing");
+
+  const [audioContext, setAudioContext] = useState(null);
+  const [player, setPlayer] = useState(null);
+  const [input, setInput] = useState(null);
+  const [instruments, setInstruments] = useState({}); // this will have the mappings program -> instrumentID info
+
+  const initAudio = () => {
+    const AudioContextFunc = window.AudioContext || window.webkitAudioContext;
+    const newContext = new AudioContextFunc();
+    const newPlayer = new WebAudioFontPlayer();
+    const reverberator = newPlayer.createReverberator(newContext);
+    reverberator.output.connect(newContext.destination);
+    const newInput = reverberator.input;
+
+    setAudioContext(newContext);
+    setPlayer(newPlayer);
+    setInput(newInput);
+  };
+  useEffect(initAudio, []);
 
   const selectFile = async (e) => {
     e.preventDefault();
@@ -32,34 +46,47 @@ const App = () => {
       return;
     }
     const song = currentMidi;
+    const instruments = { tracks: {}, beats: {} };
     for (let i = 0; i < song.tracks.length; i++) {
       let nn = player.loader.findInstrument(song.tracks[i].program);
       let info = player.loader.instrumentInfo(nn);
-      console.log({ nn, info });
-      song.tracks[i].info = info;
-      song.tracks[i].id = nn;
+      instruments.tracks[song.tracks[i].program] = {
+        info: info,
+        id: nn,
+      };
       player.loader.startLoad(audioContext, info.url, info.variable);
     }
     for (let i = 0; i < song.beats.length; i++) {
       let nn = player.loader.findDrum(song.beats[i].n);
       let info = player.loader.drumInfo(nn);
-      song.beats[i].info = info;
-      song.beats[i].id = nn;
+      instruments.beats[song.beats[i].n] = {
+        info: info,
+        id: nn,
+      };
       player.loader.startLoad(audioContext, info.url, info.variable);
     }
     player.loader.waitLoad(function () {
       console.log("Finished loading instruments");
     });
 
+    setInstruments(instruments);
     fileSelectRef.current.value = null; // clear the file so every upload is new
   }, [currentMidi, fileSelectRef, player, audioContext]);
+
+  const stopPlay = () => {
+    clearInterval(playing);
+    player.cancelQueue(audioContext); // this stops anything that's already playing
+    setPlaying(false);
+  };
 
   const play = () => {
     if (currentMidi === null) {
       console.log("not ready");
       return;
     }
+    stopPlay();
     const song = currentMidi;
+    console.log(song);
     const songStart = audioContext.currentTime;
     const stepDuration = 44 / 1000; // 44ms notes to play;
 
@@ -82,7 +109,7 @@ const App = () => {
       currentTime = audioContext.currentTime;
 
       if (currentTime > songStart + song.duration) {
-        clearInterval(playing);
+        stopPlay();
       }
     }, 22);
     setPlaying(playingId);
@@ -101,7 +128,8 @@ const App = () => {
           if (duration > 3) {
             duration = 3;
           }
-          let instr = track.info.variable;
+          // let instr = track.info.variable;
+          const instr = instruments.tracks[track.program].info.variable;
           let v = track.volume / 7;
 
           player.queueWaveTable(
@@ -124,7 +152,9 @@ const App = () => {
         if (beat.notes[i].when >= start && beat.notes[i].when < end) {
           let when = songStart + beat.notes[i].when;
           let duration = 1.5;
-          let instr = beat.info.variable;
+          // let instr = beat.info.variable;
+          const instr = instruments.beats[beat.n].info.variable;
+
           let v = beat.volume / 2;
           player.queueWaveTable(
             audioContext,
@@ -145,7 +175,7 @@ const App = () => {
       {console.log(currentMidi)}
       <header className="App-header">
         <img src={logo} className="App-logo" alt="logo" />
-        <small style={{ fontSize: "14px" }}>Hi</small>
+        <small style={{ fontSize: "14px" }}>{debugText}</small>
         <input
           type="file"
           onChange={selectFile}
