@@ -57,6 +57,18 @@ const App = () => {
       player.loader.startLoad(audioContext, info.url, info.variable);
     }
 
+    // Create "beat sheet for the tracks"
+    const timeGap = 0.1; //seconds
+    for (let i = 0; i < currentMidi.tracks.length; i += 1) {
+      let sheet = new Array(Math.ceil(currentMidi.duration / timeGap));
+      sheet.fill(".");
+      for (let j = 0; j < currentMidi.tracks[i].notes.length; j += 1) {
+        const when = currentMidi.tracks[i].notes[j].when;
+        sheet[Math.floor(when / timeGap)] = "|";
+      }
+      currentMidi.tracks[i].sheet = sheet;
+    }
+
     player.loader.waitLoad(function () {
       console.log("Finished loading instruments");
     });
@@ -98,6 +110,8 @@ const App = () => {
 const UserControl = (props) => {
   const { audioContext, input, song, player } = props;
   const [track, setTrack] = useState({});
+  const [noteIdx, setNoteIdx] = useState(0);
+  const [envelopes, setEnvelopes] = useState([]);
 
   if (!audioContext || !player || song === null) {
     return <p>Not ready</p>;
@@ -109,45 +123,42 @@ const UserControl = (props) => {
     ));
   };
 
-  console.log({ track });
-
-  let noteIdx = 0;
-  let envelopes = [];
-
   const playNote = (event) => {
     event.preventDefault();
 
     const instr = track.info.variable;
     const v = track.volume / 7;
 
-    if (noteIdx >= track.notes.length) {
-      noteIdx = 0;
+    if (noteIdx >= track.notes.length - 1) {
+      setNoteIdx(0);
     }
 
     let currentTime = track.notes[noteIdx].when;
-    let noteTime = track.notes[noteIdx].when;
-    while (currentTime === noteTime) {
+    const envContainer = [];
+    let curNoteIdx = noteIdx;
+    while (currentTime === track.notes[curNoteIdx].when) {
       const envelope = player.queueWaveTable(
         audioContext,
         input,
         window[instr], // window contains all the zone information for the instruments, seems to be configs to make it sound better, it is populated during loading
         0,
-        track.notes[noteIdx].pitch,
+        track.notes[curNoteIdx].pitch,
         999,
         v,
-        track.notes[noteIdx].slides
+        track.notes[curNoteIdx].slides
       );
-      envelopes.push(envelope);
-      noteIdx += 1;
-      noteTime = track.notes[noteIdx].when;
+      envContainer.push(envelope);
+      curNoteIdx += 1;
     }
+    setEnvelopes(envContainer);
+    setNoteIdx(curNoteIdx);
   };
 
   const stopNote = (event) => {
     event.preventDefault();
     if (envelopes.length > 0) {
       envelopes.forEach((env) => env.cancel());
-      envelopes = [];
+      setEnvelopes([]);
     }
   };
 
@@ -176,7 +187,7 @@ const UserControl = (props) => {
       >
         next note
       </button>
-      <button onClick={() => (noteIdx = 0)}>reset note idx</button>
+      <button onClick={() => setNoteIdx(0)}>reset note idx</button>
     </div>
   );
 };
@@ -185,6 +196,8 @@ const PlaySong = (props) => {
   const [playing, setPlaying] = useState(false); //tracks the id for current instance
   const { song, audioContext, player, input } = props;
   const [muteTrack, setMuteTrack] = useState([]);
+  const [songTime, setSongTime] = useState(0);
+  const [tickDisplay, setTickDisplay] = useState("");
 
   const initMuteTracks = () => {
     if (song === null) {
@@ -238,6 +251,13 @@ const PlaySong = (props) => {
         nextStepTime += stepDuration;
       }
       currentTime = audioContext.currentTime;
+      setSongTime(currentSongTime.toFixed(2));
+
+      // find tick and display it
+      const tickIdx = Math.floor(currentSongTime * 10);
+      setTickDisplay(
+        song.tracks[0].sheet.slice(tickIdx, tickIdx + 30).join("")
+      );
     }, 22);
     setPlaying(playingId);
   };
@@ -248,7 +268,6 @@ const PlaySong = (props) => {
     for (let t = 0; t < song.tracks.length; t++) {
       const track = song.tracks[t];
 
-      // skip track if muted
       if (muteTrack[t]) {
         continue;
       }
@@ -324,6 +343,10 @@ const PlaySong = (props) => {
       <br />
       <button onClick={() => play()}>Play</button>
       <button onClick={() => stopPlay()}>Stop</button>
+      <br />
+      {songTime}
+      <br></br>
+      {tickDisplay}
     </div>
   );
 };
