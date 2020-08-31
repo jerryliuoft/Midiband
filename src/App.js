@@ -5,16 +5,13 @@ import MIDIFile from "./MIDIFile";
 import WebAudioFontPlayer from "webaudiofont";
 
 const App = () => {
-  const [currentMidi, setCurrentMidi] = useState(null);
-  const [playing, setPlaying] = useState(false); //tracks the id for current instance
+  const [currentMidi, setCurrentMidi] = useState(null); // this is original midi
+  const [song, setSong] = useState(null); // this is currentMidi with instrument info added
   const fileSelectRef = useRef(null); // This is used to reset the file after uploading
 
   const [audioContext, setAudioContext] = useState(null);
   const [player, setPlayer] = useState(null);
   const [input, setInput] = useState(null);
-
-  const [userTrack, setUserTrack] = useState(null);
-  const [initialized, setInitialized] = useState(false);
 
   const initAudio = () => {
     const AudioContextFunc = window.AudioContext || window.webkitAudioContext;
@@ -45,29 +42,163 @@ const App = () => {
     if (currentMidi === null || !fileSelectRef) {
       return;
     }
-    setInitialized(false);
-    const song = currentMidi;
-    for (let i = 0; i < song.tracks.length; i++) {
-      let nn = player.loader.findInstrument(song.tracks[i].program);
+    for (let i = 0; i < currentMidi.tracks.length; i++) {
+      let nn = player.loader.findInstrument(currentMidi.tracks[i].program);
       let info = player.loader.instrumentInfo(nn);
-      song.tracks[i].info = info; // this is mutating state, but its nested so doesn't trigger rerendering and its bit easier this way
-      song.tracks[i].id = nn;
+      currentMidi.tracks[i].info = info; // this is mutating state, but its fine because i'm setting state at the end to a new variable, and currentmidi is wiped
+      currentMidi.tracks[i].id = nn;
       player.loader.startLoad(audioContext, info.url, info.variable);
     }
-    for (let i = 0; i < song.beats.length; i++) {
-      let nn = player.loader.findDrum(song.beats[i].n); // n its the percussion type
+    for (let i = 0; i < currentMidi.beats.length; i++) {
+      let nn = player.loader.findDrum(currentMidi.beats[i].n); // n its the percussion type
       let info = player.loader.drumInfo(nn);
-      song.beats[i].info = info;
-      song.beats[i].id = nn;
+      currentMidi.beats[i].info = info;
+      currentMidi.beats[i].id = nn;
       player.loader.startLoad(audioContext, info.url, info.variable);
     }
+
     player.loader.waitLoad(function () {
       console.log("Finished loading instruments");
-      setInitialized(true);
     });
 
+    setSong(currentMidi);
+    setCurrentMidi(null);
     fileSelectRef.current.value = null; // clear the file so every upload is new
   }, [currentMidi, fileSelectRef, player, audioContext]);
+
+  return (
+    <div className="App">
+      {console.log(currentMidi)}
+      <header className="App-header">
+        <img src={logo} className="App-logo" alt="logo" />
+        <input
+          type="file"
+          onChange={selectFile}
+          accept=".mid"
+          ref={fileSelectRef}
+        />
+        <PlaySong
+          song={song}
+          audioContext={audioContext}
+          input={input}
+          player={player}
+        />
+        {console.log({ song })}
+        <UserControl
+          audioContext={audioContext}
+          input={input}
+          player={player}
+          song={song}
+        />
+      </header>
+    </div>
+  );
+};
+
+const UserControl = (props) => {
+  const { audioContext, input, song, player } = props;
+  const [track, setTrack] = useState({});
+
+  if (!audioContext || !player || song === null) {
+    return <p>Not ready</p>;
+  }
+
+  const instButtons = () => {
+    return song.tracks.map((ins) => (
+      <button onClick={() => setTrack(ins)}>{ins.info.title}</button>
+    ));
+  };
+
+  console.log({ track });
+
+  let noteIdx = 0;
+  let envelopes = [];
+
+  const playNote = (event) => {
+    event.preventDefault();
+
+    const instr = track.info.variable;
+    const v = track.volume / 7;
+
+    if (noteIdx >= track.notes.length) {
+      noteIdx = 0;
+    }
+
+    let currentTime = track.notes[noteIdx].when;
+    let noteTime = track.notes[noteIdx].when;
+    while (currentTime === noteTime) {
+      const envelope = player.queueWaveTable(
+        audioContext,
+        input,
+        window[instr], // window contains all the zone information for the instruments, seems to be configs to make it sound better, it is populated during loading
+        0,
+        track.notes[noteIdx].pitch,
+        999,
+        v,
+        track.notes[noteIdx].slides
+      );
+      envelopes.push(envelope);
+      noteIdx += 1;
+      noteTime = track.notes[noteIdx].when;
+    }
+  };
+
+  const stopNote = (event) => {
+    event.preventDefault();
+    if (envelopes.length > 0) {
+      envelopes.forEach((env) => env.cancel());
+      envelopes = [];
+    }
+  };
+
+  const noselect = {
+    "-webkit-touch-callout": "none" /* iOS Safari */,
+    "-webkit-user-select": "none" /* Safari */,
+    "-khtml-user-select": "none" /* Konqueror HTML */,
+    "-moz-user-select": "none" /* Old versions of Firefox */,
+    "-ms-user-select": "none" /* Internet Explorer/Edge */,
+    "user-select":
+      "none" /* Non-prefixed version, currently
+                                    supported by Chrome, Edge, Opera and Firefox */,
+  };
+  return (
+    <div>
+      <br></br>
+      {instButtons()}
+      <br></br>
+      <button
+        style={{ width: "30em" }}
+        className={noselect}
+        onMouseDown={playNote}
+        onTouchStart={playNote}
+        onMouseUp={stopNote}
+        onTouchEnd={stopNote}
+      >
+        next note
+      </button>
+      <button onClick={() => (noteIdx = 0)}>reset note idx</button>
+    </div>
+  );
+};
+
+const PlaySong = (props) => {
+  const [playing, setPlaying] = useState(false); //tracks the id for current instance
+  const { song, audioContext, player, input } = props;
+  const [muteTrack, setMuteTrack] = useState([]);
+
+  const initMuteTracks = () => {
+    if (song === null) {
+      setMuteTrack([]);
+      return;
+    }
+
+    setMuteTrack(new Array(song.tracks.length));
+  };
+  useEffect(initMuteTracks, [song]);
+
+  if (song === null) {
+    return <p>no song selected</p>;
+  }
 
   const stopPlay = () => {
     clearInterval(playing);
@@ -76,12 +207,13 @@ const App = () => {
   };
 
   const play = () => {
-    if (currentMidi === null) {
+    if (song === null) {
       console.log("not ready");
       return;
     }
-    stopPlay();
-    const song = currentMidi;
+    if (playing) {
+      stopPlay();
+    }
     const songStart = audioContext.currentTime;
     const stepDuration = 44 / 1000; // 44ms notes to play;
 
@@ -90,6 +222,10 @@ const App = () => {
     let nextStepTime = songStart;
 
     const playingId = setInterval(() => {
+      if (currentTime >= songStart + song.duration) {
+        stopPlay();
+        return;
+      }
       if (currentTime > nextStepTime - stepDuration) {
         sendNotes(
           song,
@@ -102,10 +238,6 @@ const App = () => {
         nextStepTime += stepDuration;
       }
       currentTime = audioContext.currentTime;
-
-      if (currentTime > songStart + song.duration) {
-        stopPlay();
-      }
     }, 22);
     setPlaying(playingId);
   };
@@ -115,11 +247,17 @@ const App = () => {
   const sendNotes = (song, songStart, start, end, player) => {
     for (let t = 0; t < song.tracks.length; t++) {
       const track = song.tracks[t];
+
+      // skip track if muted
+      if (muteTrack[t]) {
+        continue;
+      }
+
       for (let i = 0; i < track.notes.length; i++) {
         // this can probably be optimized by poping already played notes so don't have to loop through them all the time, welp next time
         if (track.notes[i].when >= start && track.notes[i].when < end) {
           const when = songStart + track.notes[i].when;
-          const duration = track.notes[i].duration;
+          let duration = track.notes[i].duration;
           if (duration > 3) {
             duration = 3;
           }
@@ -162,124 +300,31 @@ const App = () => {
     }
   };
 
-  return (
-    <div className="App">
-      {console.log(currentMidi)}
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <input
-          type="file"
-          onChange={selectFile}
-          accept=".mid"
-          ref={fileSelectRef}
-        />
-        <button onClick={() => play()}>Play</button>
-        {initialized && (
-          <>
-            {console.log({ initialized })}
-            <Instruments song={currentMidi} setUserTrack={setUserTrack} />
-            <UserControl
-              audioContext={audioContext}
-              input={input}
-              player={player}
-              track={userTrack}
-            />
-          </>
-        )}
-      </header>
-    </div>
-  );
-};
-
-const Instruments = (props) => {
-  const { song, setUserTrack } = props;
-  if (!song || !song.tracks[0].info) {
-    return null;
-  }
-
-  const { tracks, beats } = song;
-
-  const instrumentButtons = tracks.map((ins) => (
-    <button key={ins.id} onClick={() => setUserTrack(ins)}>
-      {ins.info.title}
-    </button>
-  ));
-
-  const percussionButtons = beats.map((ins) => (
-    <button key={ins.id}>{ins.info.title}</button>
-  ));
+  const instrumentOptions = () => {
+    const instrumentButtons = song.tracks.map((ins, idx) => (
+      <button
+        key={idx}
+        onClick={() =>
+          setMuteTrack(() => {
+            const newState = [...muteTrack];
+            newState[idx] = !muteTrack[idx];
+            return newState;
+          })
+        }
+      >
+        {ins.info.title} {muteTrack[idx] ? "muted" : "active"}
+      </button>
+    ));
+    return instrumentButtons;
+  };
 
   return (
     <div>
-      <h2>Instruments</h2>
-      {instrumentButtons}
-      <h2>Percussions</h2>
-      {percussionButtons}
+      {instrumentOptions()}
+      <br />
+      <button onClick={() => play()}>Play</button>
+      <button onClick={() => stopPlay()}>Stop</button>
     </div>
-  );
-};
-
-const UserControl = (props) => {
-  const { audioContext, input, track, player } = props;
-
-  if (!track || !audioContext || !player) {
-    return <p>Not ready</p>;
-  }
-
-  console.log({ track });
-
-  const instr = track.info.variable;
-  const v = track.volume / 7;
-
-  let noteIdx = 0;
-  let envelope = null;
-  const playNote = (event) => {
-    event.preventDefault();
-    if (noteIdx > track.notes.length) {
-      noteIdx = 0;
-    }
-    envelope = player.queueWaveTable(
-      audioContext,
-      input,
-      window[instr], // window contains all the zone information for the instruments, seems to be configs to make it sound better, it is populated during loading
-      0,
-      track.notes[noteIdx].pitch,
-      999,
-      v,
-      track.notes[noteIdx].slides
-    );
-    noteIdx += 1;
-  };
-
-  const stopNote = (event) => {
-    event.preventDefault();
-    if (envelope) {
-      envelope.cancel();
-      envelope = null;
-    }
-  };
-
-  const noselect = {
-    "-webkit-touch-callout": "none" /* iOS Safari */,
-    "-webkit-user-select": "none" /* Safari */,
-    "-khtml-user-select": "none" /* Konqueror HTML */,
-    "-moz-user-select": "none" /* Old versions of Firefox */,
-    "-ms-user-select": "none" /* Internet Explorer/Edge */,
-    "user-select":
-      "none" /* Non-prefixed version, currently
-                                    supported by Chrome, Edge, Opera and Firefox */,
-  };
-  return (
-    <button
-      style={{ width: "30em" }}
-      className={noselect}
-      onMouseDown={playNote}
-      onTouchStart={playNote}
-      onMouseUp={stopNote}
-      onTouchEnd={stopNote}
-    >
-      next note
-    </button>
   );
 };
 
