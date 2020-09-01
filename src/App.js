@@ -12,6 +12,7 @@ const App = () => {
   const [audioContext, setAudioContext] = useState(null);
   const [player, setPlayer] = useState(null);
   const [input, setInput] = useState(null);
+  const [songTime, setSongTime] = useState(0);
 
   const initAudio = () => {
     const AudioContextFunc = window.AudioContext || window.webkitAudioContext;
@@ -74,13 +75,13 @@ const App = () => {
     });
 
     setSong(currentMidi);
+    console.log({ currentMidi });
     setCurrentMidi(null);
     fileSelectRef.current.value = null; // clear the file so every upload is new
   }, [currentMidi, fileSelectRef, player, audioContext]);
 
   return (
     <div className="App">
-      {console.log(currentMidi)}
       <header className="App-header">
         <img src={logo} className="App-logo" alt="logo" />
         <input
@@ -89,18 +90,21 @@ const App = () => {
           accept=".mid"
           ref={fileSelectRef}
         />
+        <br />
+        {songTime}
         <PlaySong
           song={song}
           audioContext={audioContext}
           input={input}
           player={player}
+          setSongTime={setSongTime}
         />
-        {console.log({ song })}
         <UserControl
           audioContext={audioContext}
           input={input}
           player={player}
           song={song}
+          songTime={songTime}
         />
       </header>
     </div>
@@ -108,18 +112,31 @@ const App = () => {
 };
 
 const UserControl = (props) => {
-  const { audioContext, input, song, player } = props;
+  const { audioContext, input, song, player, songTime } = props;
   const [track, setTrack] = useState({});
   const [noteIdx, setNoteIdx] = useState(0);
   const [envelopes, setEnvelopes] = useState([]);
+  const [tickDisplay, setTickDisplay] = useState("");
+
+  // update tick display when songTime changes
+  useEffect(() => {
+    if (!song || !track.sheet) {
+      return;
+    }
+    // find tick and display it
+    const tickIdx = Math.floor(songTime * 10);
+    setTickDisplay(track.sheet.slice(tickIdx, tickIdx + 30).join(""));
+  }, [song, songTime, track]);
 
   if (!audioContext || !player || song === null) {
     return <p>Not ready</p>;
   }
 
   const instButtons = () => {
-    return song.tracks.map((ins) => (
-      <button onClick={() => setTrack(ins)}>{ins.info.title}</button>
+    return song.tracks.map((ins, idx) => (
+      <button key={idx} onClick={() => setTrack(ins)}>
+        {ins.info.title}
+      </button>
     ));
   };
 
@@ -177,8 +194,10 @@ const UserControl = (props) => {
       <br></br>
       {instButtons()}
       <br></br>
+      {tickDisplay}
+      <br></br>
       <button
-        style={{ width: "30em" }}
+        style={{ width: "30em", height: "10em" }}
         className={noselect}
         onMouseDown={playNote}
         onTouchStart={playNote}
@@ -194,10 +213,8 @@ const UserControl = (props) => {
 
 const PlaySong = (props) => {
   const [playing, setPlaying] = useState(false); //tracks the id for current instance
-  const { song, audioContext, player, input } = props;
+  const { song, audioContext, player, input, setSongTime } = props;
   const [muteTrack, setMuteTrack] = useState([]);
-  const [songTime, setSongTime] = useState(0);
-  const [tickDisplay, setTickDisplay] = useState("");
 
   const initMuteTracks = () => {
     if (song === null) {
@@ -208,10 +225,6 @@ const PlaySong = (props) => {
     setMuteTrack(new Array(song.tracks.length));
   };
   useEffect(initMuteTracks, [song]);
-
-  if (song === null) {
-    return <p>no song selected</p>;
-  }
 
   const stopPlay = () => {
     clearInterval(playing);
@@ -252,15 +265,11 @@ const PlaySong = (props) => {
       }
       currentTime = audioContext.currentTime;
       setSongTime(currentSongTime.toFixed(2));
-
-      // find tick and display it
-      const tickIdx = Math.floor(currentSongTime * 10);
-      setTickDisplay(
-        song.tracks[0].sheet.slice(tickIdx, tickIdx + 30).join("")
-      );
     }, 22);
     setPlaying(playingId);
   };
+
+  const songLoop = () => {};
 
   // Helper to play the note at certain time frame, we can't load all of the notes at once because it won't play either memory issue or w/e
   // so work around is to just play them one time frame at a time.
@@ -337,16 +346,16 @@ const PlaySong = (props) => {
     return instrumentButtons;
   };
 
+  if (song === null) {
+    return <p>no song selected</p>;
+  }
+
   return (
     <div>
       {instrumentOptions()}
       <br />
       <button onClick={() => play()}>Play</button>
       <button onClick={() => stopPlay()}>Stop</button>
-      <br />
-      {songTime}
-      <br></br>
-      {tickDisplay}
     </div>
   );
 };
