@@ -1,18 +1,19 @@
 import React, { useState, useEffect, useRef } from "react";
-import logo from "./logo.svg";
-import "./App.css";
+import "bootswatch/dist/slate/bootstrap.min.css"; // bootswatch theme
 import MIDIFile from "./MIDIFile";
 import WebAudioFontPlayer from "webaudiofont";
 
+import Button from "react-bootstrap/Button";
+import Modal from "react-bootstrap/Modal";
+
 const App = () => {
-  const [currentMidi, setCurrentMidi] = useState(null); // this is original midi
   const [song, setSong] = useState(null); // this is currentMidi with instrument info added
-  const fileSelectRef = useRef(null); // This is used to reset the file after uploading
 
   const [audioContext, setAudioContext] = useState(null);
   const [player, setPlayer] = useState(null);
   const [input, setInput] = useState(null);
   const [songTime, setSongTime] = useState(0);
+  const [muteTracks, setMuteTracks] = useState([]); // muteTracks[id] true: not playing false: playing
 
   const initAudio = () => {
     const AudioContextFunc = window.AudioContext || window.webkitAudioContext;
@@ -27,6 +28,55 @@ const App = () => {
     setInput(newInput);
   };
   useEffect(initAudio, []);
+
+  return (
+    <div>
+      <div
+        style={{
+          marginBottom: "0.5em",
+          marginTop: "0.5em",
+          display: "flex",
+          justifyContent: "space-evenly",
+        }}
+      >
+        <UploadMidi
+          setSong={setSong}
+          audioContext={audioContext}
+          player={player}
+          setMuteTracks={setMuteTracks}
+        />
+        <InstrumentOptions
+          setMuteTracks={setMuteTracks}
+          song={song}
+          muteTracks={muteTracks}
+        />
+      </div>
+      <br />
+      {songTime}
+
+      <PlaySong
+        song={song}
+        audioContext={audioContext}
+        input={input}
+        player={player}
+        setSongTime={setSongTime}
+        muteTracks={muteTracks}
+      />
+      <UserControl
+        audioContext={audioContext}
+        input={input}
+        player={player}
+        song={song}
+        songTime={songTime}
+      />
+    </div>
+  );
+};
+
+const UploadMidi = (props) => {
+  const { player, audioContext, setSong, setMuteTracks } = props;
+  const [currentMidi, setCurrentMidi] = useState(null); // this is original midi
+  const fileSelectRef = useRef(null); // This is used to reset the file after uploading
 
   const selectFile = async (e) => {
     e.preventDefault();
@@ -76,38 +126,26 @@ const App = () => {
     });
 
     setSong(currentMidi);
+    const muteTracks = new Array(currentMidi.tracks.length + 1); // last element for percussions
+    muteTracks.fill(false);
+    setMuteTracks(muteTracks);
     console.log({ currentMidi });
     setCurrentMidi(null);
     fileSelectRef.current.value = null; // clear the file so every upload is new
   }, [currentMidi, fileSelectRef, player, audioContext]);
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <input
-          type="file"
-          onChange={selectFile}
-          accept=".mid"
-          ref={fileSelectRef}
-        />
-        <br />
-        {songTime}
-        <PlaySong
-          song={song}
-          audioContext={audioContext}
-          input={input}
-          player={player}
-          setSongTime={setSongTime}
-        />
-        <UserControl
-          audioContext={audioContext}
-          input={input}
-          player={player}
-          song={song}
-          songTime={songTime}
-        />
-      </header>
+    <div>
+      <Button onClick={() => fileSelectRef.current.click()}>
+        Upload a new midi
+      </Button>
+      <input
+        type="file"
+        onChange={selectFile}
+        accept=".mid"
+        ref={fileSelectRef}
+        style={{ display: "none" }}
+      />
     </div>
   );
 };
@@ -214,8 +252,7 @@ const UserControl = (props) => {
 
 const PlaySong = (props) => {
   const [playing, setPlaying] = useState(false); //tracks the id for current instance
-  const { song, audioContext, player, input, setSongTime } = props;
-  const [muteTrack, setMuteTrack] = useState([]);
+  const { song, audioContext, player, input, setSongTime, muteTracks } = props;
 
   // song loop required variables
   const [currentSongTime, setCurrentSongTime] = useState(0);
@@ -224,16 +261,6 @@ const PlaySong = (props) => {
   const [currentTime, setCurrentTime] = useState(0);
 
   const stepDuration = 44 / 1000; // 44ms notes to play;
-
-  const initMuteTracks = () => {
-    if (song === null) {
-      setMuteTrack([]);
-      return;
-    }
-
-    setMuteTrack(new Array(song.tracks.length));
-  };
-  useEffect(initMuteTracks, [song]);
 
   const stopPlay = () => {
     clearInterval(playing);
@@ -298,7 +325,7 @@ const PlaySong = (props) => {
     for (let t = 0; t < song.tracks.length; t++) {
       const track = song.tracks[t];
 
-      if (muteTrack[t]) {
+      if (muteTracks[t]) {
         continue;
       }
 
@@ -326,6 +353,10 @@ const PlaySong = (props) => {
         }
       }
     }
+    if (muteTracks[muteTracks.length - 1]) {
+      // last element marks percussion, if true we don't do any percussions
+      return;
+    }
     // same as above but for beats
     for (let b = 0; b < song.beats.length; b++) {
       const beat = song.beats[b];
@@ -349,35 +380,58 @@ const PlaySong = (props) => {
     }
   };
 
-  const instrumentOptions = () => {
-    const instrumentButtons = song.tracks.map((ins, idx) => (
-      <button
-        key={idx}
-        onClick={() =>
-          setMuteTrack(() => {
-            const newState = [...muteTrack];
-            newState[idx] = !muteTrack[idx];
-            return newState;
-          })
-        }
-      >
-        {ins.info.title} {muteTrack[idx] ? "muted" : "active"}
-      </button>
-    ));
-    return instrumentButtons;
-  };
-
   if (song === null) {
     return <p>no song selected</p>;
   }
 
   return (
     <div>
-      {instrumentOptions()}
-      <br />
       <button onClick={() => play()}>Play</button>
       <button onClick={() => stopPlay()}>Stop</button>
     </div>
+  );
+};
+
+const InstrumentOptions = (props) => {
+  const { setMuteTracks, song, muteTracks } = props;
+  const [show, setShow] = useState(false);
+
+  const handleClose = () => setShow(false);
+  const handleShow = () => setShow(true);
+  let tracks = [];
+  if (song) {
+    tracks = song.tracks;
+  }
+  const instrumentButtons = tracks.map((ins, idx) => (
+    <Button
+      variant="outline-success"
+      key={idx}
+      active={!muteTracks[idx]}
+      style={{ marginBottom: "0.5em", marginRight: "0.5em" }}
+      onClick={() =>
+        setMuteTracks(() => {
+          const newState = [...muteTracks];
+          newState[idx] = !muteTracks[idx];
+          return newState;
+        })
+      }
+    >
+      {ins.info.title}
+    </Button>
+  ));
+  return (
+    <>
+      <Button variant="primary" onClick={handleShow}>
+        Track Options
+      </Button>
+
+      <Modal show={show} onHide={handleClose}>
+        <Modal.Header closeButton>
+          <Modal.Title>Enable/disable playback</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>{instrumentButtons}</Modal.Body>
+      </Modal>
+    </>
   );
 };
 
