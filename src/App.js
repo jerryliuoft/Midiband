@@ -71,6 +71,7 @@ const App = () => {
     }
 
     player.loader.waitLoad(function () {
+      audioContext.resume(); // it gets paused sometimes
       console.log("Finished loading instruments");
     });
 
@@ -242,10 +243,6 @@ const PlaySong = (props) => {
   };
 
   const play = () => {
-    if (audioContext.currentTime === 0) {
-      audioContext.resume(); // this gets paused sometimes not sure why, symptom is audiocontext time is stuck at 0
-    }
-
     if (song === null) {
       console.log("not ready");
       return;
