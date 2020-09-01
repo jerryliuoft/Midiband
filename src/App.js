@@ -216,6 +216,14 @@ const PlaySong = (props) => {
   const { song, audioContext, player, input, setSongTime } = props;
   const [muteTrack, setMuteTrack] = useState([]);
 
+  // song loop required variables
+  const [currentSongTime, setCurrentSongTime] = useState(0);
+  const [songStart, setSongStart] = useState(0);
+  const [nextStepTime, setNextStepTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  const stepDuration = 44 / 1000; // 44ms notes to play;
+
   const initMuteTracks = () => {
     if (song === null) {
       setMuteTrack([]);
@@ -230,9 +238,14 @@ const PlaySong = (props) => {
     clearInterval(playing);
     player.cancelQueue(audioContext); // this stops anything that's already playing
     setPlaying(false);
+    setSongStart(0);
   };
 
   const play = () => {
+    if (audioContext.currentTime === 0) {
+      audioContext.resume(); // this gets paused sometimes not sure why, symptom is audiocontext time is stuck at 0
+    }
+
     if (song === null) {
       console.log("not ready");
       return;
@@ -240,36 +253,47 @@ const PlaySong = (props) => {
     if (playing) {
       stopPlay();
     }
-    const songStart = audioContext.currentTime;
-    const stepDuration = 44 / 1000; // 44ms notes to play;
+    console.log("Playing");
 
-    let currentTime = songStart;
-    let currentSongTime = 0;
-    let nextStepTime = songStart;
-
+    setSongStart(audioContext.currentTime);
+    setCurrentSongTime(0);
+    setNextStepTime(audioContext.currentTime);
+    setCurrentTime(audioContext.currentTime);
     const playingId = setInterval(() => {
-      if (currentTime >= songStart + song.duration) {
-        stopPlay();
-        return;
-      }
-      if (currentTime > nextStepTime - stepDuration) {
-        sendNotes(
-          song,
-          songStart,
-          currentSongTime,
-          currentSongTime + stepDuration,
-          player
-        );
-        currentSongTime += stepDuration;
-        nextStepTime += stepDuration;
-      }
-      currentTime = audioContext.currentTime;
-      setSongTime(currentSongTime.toFixed(2));
-    }, 22);
+      setCurrentTime(audioContext.currentTime);
+    }, 44);
     setPlaying(playingId);
   };
 
-  const songLoop = () => {};
+  const songLoop = () => {
+    if (songStart === 0) {
+      return; // play hasn't been pressed yet
+    }
+
+    if (currentTime >= songStart + song.duration) {
+      stopPlay();
+      return;
+    }
+    if (currentTime > nextStepTime - stepDuration) {
+      sendNotes(
+        song,
+        songStart,
+        currentSongTime,
+        currentSongTime + stepDuration,
+        player
+      );
+      setCurrentSongTime((prev) => prev + stepDuration);
+      setNextStepTime((prev) => prev + stepDuration);
+    }
+    setSongTime(currentSongTime.toFixed(2));
+  };
+  useEffect(songLoop, [
+    song,
+    songStart,
+    nextStepTime,
+    currentSongTime,
+    currentTime,
+  ]);
 
   // Helper to play the note at certain time frame, we can't load all of the notes at once because it won't play either memory issue or w/e
   // so work around is to just play them one time frame at a time.
