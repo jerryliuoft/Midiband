@@ -63,36 +63,37 @@ const App = () => {
         />
       </div>
       <br />
-      {songTime}
-
-      {startPlaying && (
-        <Button
-          onClick={() => {
-            setStartPlaying(false);
-            setSongTime(0);
-          }}
-        >
-          Stop playing
-        </Button>
-      )}
-      <AddATrack song={song} setTrack={setTrack} />
-      <PlaySong
-        startPlaying={startPlaying}
-        song={song}
-        audioContext={audioContext}
-        input={input}
-        player={player}
-        setSongTime={setSongTime}
-        muteTracks={muteTracks}
-      />
-      <UserControl
-        audioContext={audioContext}
-        input={input}
-        player={player}
-        track={selectedTrack}
-        songTime={songTime}
-        setStartPlaying={setStartPlaying}
-      />
+      <div style={{ textAlign: "center" }}>
+        <div>{songTime}</div>
+        {startPlaying && (
+          <Button
+            onClick={() => {
+              setStartPlaying(false);
+              setSongTime(0);
+            }}
+          >
+            Stop playing
+          </Button>
+        )}
+        <AddATrack song={song} setTrack={setTrack} />
+        <PlaySong
+          startPlaying={startPlaying}
+          song={song}
+          audioContext={audioContext}
+          input={input}
+          player={player}
+          setSongTime={setSongTime}
+          muteTracks={muteTracks}
+        />
+        <UserControl
+          audioContext={audioContext}
+          input={input}
+          player={player}
+          track={selectedTrack}
+          songTime={songTime}
+          setStartPlaying={setStartPlaying}
+        />
+      </div>
     </div>
   );
 };
@@ -293,7 +294,7 @@ const UserControl = (props) => {
         {tickDisplay}
       </Button>
       <Button onClick={() => fastForwardNoteIdxToPlayTime()}>
-        Press me to sync up to play time
+        Press me if you are out of sync
       </Button>
     </div>
   );
