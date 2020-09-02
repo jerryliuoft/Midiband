@@ -173,9 +173,9 @@ const UserControl = (props) => {
 
   const instButtons = () => {
     return song.tracks.map((ins, idx) => (
-      <button key={idx} onClick={() => setTrack(ins)}>
+      <Button key={idx} onClick={() => setTrack(ins)}>
         {ins.info.title}
-      </button>
+      </Button>
     ));
   };
 
@@ -235,8 +235,9 @@ const UserControl = (props) => {
       <br></br>
       {tickDisplay}
       <br></br>
-      <button
-        style={{ width: "30em", height: "10em" }}
+      <Button
+        style={{ width: "100%", height: "10em" }}
+        variant="outline-info"
         className={noselect}
         onMouseDown={playNote}
         onTouchStart={playNote}
@@ -244,7 +245,7 @@ const UserControl = (props) => {
         onTouchEnd={stopNote}
       >
         next note
-      </button>
+      </Button>
       <button onClick={() => setNoteIdx(0)}>reset note idx</button>
     </div>
   );
