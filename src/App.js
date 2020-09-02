@@ -182,6 +182,10 @@ const UserControl = (props) => {
   const playNote = (event) => {
     event.preventDefault();
 
+    if (!track.info) {
+      return;
+    }
+
     const instr = track.info.variable;
     const v = track.volume / 7;
 
@@ -231,12 +235,15 @@ const UserControl = (props) => {
   return (
     <div>
       <br></br>
-      {instButtons()}
-      <br></br>
-      {tickDisplay}
+      <div>{instButtons()}</div>
       <br></br>
       <Button
-        style={{ width: "100%", height: "10em" }}
+        style={{
+          width: "90%",
+          height: "10em",
+          marginLeft: "1em",
+          marginRight: "1em",
+        }}
         variant="outline-info"
         className={noselect}
         onMouseDown={playNote}
@@ -244,7 +251,7 @@ const UserControl = (props) => {
         onMouseUp={stopNote}
         onTouchEnd={stopNote}
       >
-        next note
+        {tickDisplay}
       </Button>
       <button onClick={() => setNoteIdx(0)}>reset note idx</button>
     </div>
@@ -430,7 +437,38 @@ const InstrumentOptions = (props) => {
         <Modal.Header closeButton>
           <Modal.Title>Enable/disable playback</Modal.Title>
         </Modal.Header>
-        <Modal.Body>{instrumentButtons}</Modal.Body>
+        <Modal.Body>
+          <Button
+            variant="outline-warning"
+            style={{ marginBottom: "0.5em", marginRight: "0.5em" }}
+            onClick={() =>
+              setMuteTracks(() => {
+                const newState = [...muteTracks];
+                newState.fill(true);
+                return newState;
+              })
+            }
+          >
+            Mute all
+          </Button>
+          {instrumentButtons}
+          <Button
+            active={!muteTracks[muteTracks.length - 1]}
+            style={{ marginBottom: "0.5em", marginRight: "0.5em" }}
+            variant="outline-success"
+            onClick={() =>
+              setMuteTracks(() => {
+                const newState = [...muteTracks];
+                newState[muteTracks.length - 1] = !muteTracks[
+                  muteTracks.length - 1
+                ];
+                return newState;
+              })
+            }
+          >
+            Percussions
+          </Button>
+        </Modal.Body>
       </Modal>
     </>
   );
