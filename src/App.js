@@ -15,6 +15,17 @@ const App = () => {
   const [songTime, setSongTime] = useState(0);
   const [muteTracks, setMuteTracks] = useState([]); // muteTracks[id] true: not playing false: playing
 
+  const [selectedTrack, setSelectedTrack] = useState(null); // the track that the user will play
+  const [startPlaying, setStartPlaying] = useState(false);
+
+  const setTrack = (id) => {
+    const muteTracksTmp = [...muteTracks];
+    muteTracksTmp.fill(false); // need to unmute everything else
+    muteTracksTmp[id] = true;
+    setMuteTracks(muteTracksTmp);
+    setSelectedTrack(song.tracks[id]);
+  };
+
   const initAudio = () => {
     const AudioContextFunc = window.AudioContext || window.webkitAudioContext;
     const newContext = new AudioContextFunc();
@@ -54,7 +65,19 @@ const App = () => {
       <br />
       {songTime}
 
+      {startPlaying && (
+        <Button
+          onClick={() => {
+            setStartPlaying(false);
+            setSongTime(0);
+          }}
+        >
+          Stop playing
+        </Button>
+      )}
+      <AddATrack song={song} setTrack={setTrack} />
       <PlaySong
+        startPlaying={startPlaying}
         song={song}
         audioContext={audioContext}
         input={input}
@@ -66,8 +89,9 @@ const App = () => {
         audioContext={audioContext}
         input={input}
         player={player}
-        song={song}
+        track={selectedTrack}
         songTime={songTime}
+        setStartPlaying={setStartPlaying}
       />
     </div>
   );
@@ -124,6 +148,7 @@ const UploadMidi = (props) => {
       audioContext.resume(); // it gets paused sometimes
       console.log("Finished loading instruments");
     });
+    audioContext.resume(); // on reload midi, ^ might not run cuz there's no more instrument to load
 
     setSong(currentMidi);
     const muteTracks = new Array(currentMidi.tracks.length + 1); // last element for percussions
@@ -151,38 +176,45 @@ const UploadMidi = (props) => {
 };
 
 const UserControl = (props) => {
-  const { audioContext, input, song, player, songTime } = props;
-  const [track, setTrack] = useState({});
+  const {
+    audioContext,
+    input,
+    player,
+    songTime,
+    track,
+    setStartPlaying,
+  } = props;
   const [noteIdx, setNoteIdx] = useState(0);
   const [envelopes, setEnvelopes] = useState([]);
   const [tickDisplay, setTickDisplay] = useState("");
 
   // update tick display when songTime changes
   useEffect(() => {
-    if (!song || !track.sheet) {
+    if (!track || !track.sheet) {
       return;
     }
     // find tick and display it
     const tickIdx = Math.floor(songTime * 10);
     setTickDisplay(track.sheet.slice(tickIdx, tickIdx + 30).join(""));
-  }, [song, songTime, track]);
+    // reset the note if song got reset
+    if (songTime === 0) {
+      setNoteIdx(0);
+    }
+  }, [songTime, track]);
 
-  if (!audioContext || !player || song === null) {
+  if (!audioContext || !player || !track) {
     return <p>Not ready</p>;
   }
 
-  const instButtons = () => {
-    return song.tracks.map((ins, idx) => (
-      <Button key={idx} onClick={() => setTrack(ins)}>
-        {ins.info.title}
-      </Button>
-    ));
-  };
-
   const playNote = (event) => {
     event.preventDefault();
-
+    setStartPlaying(true);
     if (!track.info) {
+      return;
+    }
+
+    if (songTime === 0 && track.notes[0].when > 0.5) {
+      // When user first press play note, and the first note is not in the begining don't play the note
       return;
     }
 
@@ -196,6 +228,7 @@ const UserControl = (props) => {
     let currentTime = track.notes[noteIdx].when;
     const envContainer = [];
     let curNoteIdx = noteIdx;
+    // the while loops it to play chords if multiple notes are firing at the same time
     while (currentTime === track.notes[curNoteIdx].when) {
       const envelope = player.queueWaveTable(
         audioContext,
@@ -222,6 +255,15 @@ const UserControl = (props) => {
     }
   };
 
+  const fastForwardNoteIdxToPlayTime = () => {
+    let nextNote = noteIdx;
+
+    while (track.notes[nextNote].when < songTime) {
+      nextNote += 1;
+    }
+    setNoteIdx(nextNote);
+  };
+
   const noselect = {
     "-webkit-touch-callout": "none" /* iOS Safari */,
     "-webkit-user-select": "none" /* Safari */,
@@ -234,9 +276,6 @@ const UserControl = (props) => {
   };
   return (
     <div>
-      <br></br>
-      <div>{instButtons()}</div>
-      <br></br>
       <Button
         style={{
           width: "90%",
@@ -253,14 +292,24 @@ const UserControl = (props) => {
       >
         {tickDisplay}
       </Button>
-      <button onClick={() => setNoteIdx(0)}>reset note idx</button>
+      <Button onClick={() => fastForwardNoteIdxToPlayTime()}>
+        Press me to sync up to play time
+      </Button>
     </div>
   );
 };
 
 const PlaySong = (props) => {
   const [playing, setPlaying] = useState(false); //tracks the id for current instance
-  const { song, audioContext, player, input, setSongTime, muteTracks } = props;
+  const {
+    song,
+    audioContext,
+    player,
+    input,
+    setSongTime,
+    muteTracks,
+    startPlaying,
+  } = props;
 
   // song loop required variables
   const [currentSongTime, setCurrentSongTime] = useState(0);
@@ -296,6 +345,17 @@ const PlaySong = (props) => {
     }, 44);
     setPlaying(playingId);
   };
+
+  // use props to trigger if we should play the song or not
+  useEffect(() => {
+    if (startPlaying) {
+      play();
+    } else {
+      if (playing) {
+        stopPlay();
+      }
+    }
+  }, [startPlaying]);
 
   const songLoop = () => {
     if (songStart === 0) {
@@ -355,7 +415,7 @@ const PlaySong = (props) => {
             when,
             track.notes[i].pitch,
             duration,
-            v,
+            v / 5, // i'm dividing by 5 so that the instrument player is playing is louder
             track.notes[i].slides
           );
         }
@@ -392,12 +452,7 @@ const PlaySong = (props) => {
     return <p>no song selected</p>;
   }
 
-  return (
-    <div>
-      <button onClick={() => play()}>Play</button>
-      <button onClick={() => stopPlay()}>Stop</button>
-    </div>
-  );
+  return <div></div>;
 };
 
 const InstrumentOptions = (props) => {
@@ -471,6 +526,46 @@ const InstrumentOptions = (props) => {
         </Modal.Body>
       </Modal>
     </>
+  );
+};
+
+const AddATrack = (props) => {
+  const { song, setTrack } = props;
+  const [show, setShow] = useState(false);
+
+  const handleClose = () => setShow(false);
+
+  let tracks = [];
+  if (song) {
+    tracks = song.tracks;
+  }
+  const instrumentButtons = tracks.map((ins, idx) => (
+    <Button
+      variant="secondary"
+      key={idx}
+      style={{ marginBottom: "0.5em", marginRight: "0.5em" }}
+      onClick={() => {
+        setTrack(idx);
+        handleClose();
+      }}
+    >
+      {ins.info.title}
+    </Button>
+  ));
+
+  if (!song) {
+    return null;
+  }
+  return (
+    <div>
+      <Button onClick={() => setShow(true)}>Pick a track</Button>
+      <Modal show={show} onHide={handleClose}>
+        <Modal.Header closeButton>
+          <Modal.Title>Enable/disable playback</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>{instrumentButtons}</Modal.Body>
+      </Modal>
+    </div>
   );
 };
 
