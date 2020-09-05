@@ -40,6 +40,11 @@ const App = () => {
   };
   useEffect(initAudio, []);
 
+  const stopPlaying = () => {
+    setStartPlaying(false);
+    setSongTime(0);
+  };
+
   return (
     <div>
       <div
@@ -55,6 +60,7 @@ const App = () => {
           audioContext={audioContext}
           player={player}
           setMuteTracks={setMuteTracks}
+          stopPlaying={stopPlaying}
         />
         <InstrumentOptions
           setMuteTracks={setMuteTracks}
@@ -65,16 +71,7 @@ const App = () => {
       <br />
       <div style={{ textAlign: "center" }}>
         <div>{songTime}</div>
-        {startPlaying && (
-          <Button
-            onClick={() => {
-              setStartPlaying(false);
-              setSongTime(0);
-            }}
-          >
-            Stop playing
-          </Button>
-        )}
+        {startPlaying && <Button onClick={stopPlaying}>Stop playing</Button>}
         <AddATrack song={song} setTrack={setTrack} />
         <PlaySong
           startPlaying={startPlaying}
@@ -99,12 +96,13 @@ const App = () => {
 };
 
 const UploadMidi = (props) => {
-  const { player, audioContext, setSong, setMuteTracks } = props;
+  const { player, audioContext, setSong, setMuteTracks, stopPlaying } = props;
   const [currentMidi, setCurrentMidi] = useState(null); // this is original midi
   const fileSelectRef = useRef(null); // This is used to reset the file after uploading
 
   const selectFile = async (e) => {
     e.preventDefault();
+    stopPlaying();
     const reader = new FileReader();
     reader.onload = async (e) => {
       const midi = new MIDIFile(e.target.result);
@@ -187,7 +185,7 @@ const UserControl = (props) => {
   } = props;
   const [noteIdx, setNoteIdx] = useState(0);
   const [envelopes, setEnvelopes] = useState([]);
-  const [tickDisplay, setTickDisplay] = useState("");
+  const [tickDisplay, setTickDisplay] = useState("Press me to start");
 
   // update tick display when songTime changes
   useEffect(() => {
@@ -196,10 +194,11 @@ const UserControl = (props) => {
     }
     // find tick and display it
     const tickIdx = Math.floor(songTime * 10);
-    setTickDisplay(track.sheet.slice(tickIdx, tickIdx + 30).join(""));
+    setTickDisplay("->" + track.sheet.slice(tickIdx, tickIdx + 30).join(""));
     // reset the note if song got reset
     if (songTime === 0) {
       setNoteIdx(0);
+      setTickDisplay("Press me to start");
     }
   }, [songTime, track]);
 
