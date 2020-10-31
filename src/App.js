@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React from "react";
 import "bootswatch/dist/slate/bootstrap.min.css"; // bootswatch theme
 import { BrowserRouter as Router, Switch, Route, Link } from "react-router-dom";
 

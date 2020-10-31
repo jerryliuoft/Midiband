@@ -3,17 +3,10 @@ import "bootswatch/dist/slate/bootstrap.min.css"; // bootswatch theme
 import MIDIFile from "./MIDIFile";
 import WebAudioFontPlayer from "webaudiofont";
 
-import * as firebase from "firebase/app";
-import "firebase/database";
-
 import Button from "react-bootstrap/Button";
 import Modal from "react-bootstrap/Modal";
 
-import { useParams } from "react-router-dom";
-
 const App = (props) => {
-  const { roomid } = useParams();
-
   const [song, setSong] = useState(null); // this is currentMidi with instrument info added
 
   const [audioContext, setAudioContext] = useState(null);
@@ -68,7 +61,6 @@ const App = (props) => {
           player={player}
           setMuteTracks={setMuteTracks}
           stopPlaying={stopPlaying}
-          roomid={roomid}
         />
         <InstrumentOptions
           setMuteTracks={setMuteTracks}
@@ -78,7 +70,6 @@ const App = (props) => {
       </div>
       <br />
       <div style={{ textAlign: "center" }}>
-        {roomid && <div>Room Id : {roomid}</div>}
         <div>{songTime}</div>
         {startPlaying && <Button onClick={stopPlaying}>Stop playing</Button>}
         <AddATrack song={song} setTrack={setTrack} />
@@ -105,59 +96,10 @@ const App = (props) => {
 };
 
 const UploadMidi = (props) => {
-  const {
-    player,
-    audioContext,
-    setSong,
-    setMuteTracks,
-    stopPlaying,
-    roomid,
-  } = props;
+  const { player, audioContext, setSong, setMuteTracks, stopPlaying } = props;
 
   const [currentMidi, setCurrentMidi] = useState(null); // this is original midi
   const fileSelectRef = useRef(null); // This is used to reset the file after uploading
-  const [database, setDatabase] = useState(null);
-
-  const initFirebase = () => {
-    if (!roomid) {
-      return;
-    }
-    const firebaseConfig = {
-      apiKey: "AIzaSyA_W8Bj7I5H-MfMDRUh9r1gmPeAx08ujQI",
-      authDomain: "midiband-eba3a.firebaseapp.com",
-      databaseURL: "https://midiband-eba3a.firebaseio.com",
-      projectId: "midiband-eba3a",
-      storageBucket: "midiband-eba3a.appspot.com",
-      messagingSenderId: "189588713562",
-      appId: "1:189588713562:web:cf4434fa21acc453752863",
-      measurementId: "G-0VKW0716HN",
-    };
-    firebase.initializeApp(firebaseConfig);
-    const firebaseDatabase = firebase.database();
-    setDatabase(firebaseDatabase);
-    firebaseDatabase.ref(roomid + "/").on("value", (snapshot) => {
-      if (snapshot.val()) {
-        console.log({ snapshot: snapshot.val() });
-        const midi = snapshot.val().midi;
-        if (midi.beats) {
-          // firebase removes empty array so we added it back in here
-          setCurrentMidi(snapshot.val().midi);
-        } else {
-          setCurrentMidi({ ...snapshot.val().midi, beats: [] });
-        }
-      }
-    });
-  };
-  useEffect(initFirebase, [roomid]);
-
-  const shareSongWithEveryone = () => {
-    if (!roomid || !currentMidi || !database) {
-      return;
-    }
-    console.log({ currentMidi });
-    database.ref(roomid + "/").set({ midi: currentMidi });
-  };
-  useEffect(shareSongWithEveryone, [roomid, currentMidi]);
 
   const selectFile = async (e) => {
     e.preventDefault();
