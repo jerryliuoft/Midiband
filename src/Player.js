@@ -6,7 +6,7 @@ import WebAudioFontPlayer from "webaudiofont";
 import Button from "react-bootstrap/Button";
 import Modal from "react-bootstrap/Modal";
 
-const App = (props) => {
+const App = () => {
   const [song, setSong] = useState(null); // this is currentMidi with instrument info added
 
   const [audioContext, setAudioContext] = useState(null);
@@ -417,7 +417,7 @@ const PlaySong = (props) => {
             when,
             track.notes[i].pitch,
             duration,
-            v / 5, // i'm dividing by 5 so that the instrument player is playing is louder
+            v,
             track.notes[i].slides
           );
         }
