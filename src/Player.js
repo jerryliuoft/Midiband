@@ -21,14 +21,6 @@ const App = () => {
   const [selectedTrack, setSelectedTrack] = useState(null); // the track that the user will play
   const [startPlaying, setStartPlaying] = useState(false);
 
-  const setTrack = (id) => {
-    const muteTracksTmp = [...muteTracks];
-    muteTracksTmp.fill(false); // need to unmute everything else
-    muteTracksTmp[id] = true;
-    setMuteTracks(muteTracksTmp);
-    setSelectedTrack(song.tracks[id]);
-  };
-
   const initAudio = () => {
     const AudioContextFunc = window.AudioContext || window.webkitAudioContext;
     const newContext = new AudioContextFunc();
@@ -75,7 +67,7 @@ const App = () => {
             stopPlaying={stopPlaying}
             song={song}
             muteTracks={muteTracks}
-            setTrack={setTrack}
+            setSelectedTrack={setSelectedTrack}
           />
           {startPlaying && (
             <Button style={{ marginLeft: "1em" }} onClick={stopPlaying}>

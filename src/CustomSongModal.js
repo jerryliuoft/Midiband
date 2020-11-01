@@ -14,12 +14,21 @@ const CustomSongModal = (props) => {
     stopPlaying,
     song,
     muteTracks,
-    setTrack,
+    setSelectedTrack,
   } = props;
   const [show, setShow] = useState(false);
 
   const handleClose = () => setShow(false);
   const handleShow = () => setShow(true);
+
+  const setTrack = (id) => {
+    // TODO this function is copied everywhere, probably need a way to move them all use this somehow
+    const muteTracksTmp = [...muteTracks];
+    muteTracksTmp.fill(false); // need to unmute everything else
+    muteTracksTmp[id] = true;
+    setMuteTracks(muteTracksTmp);
+    setSelectedTrack(song.tracks[id]);
+  };
 
   return (
     <>
@@ -32,13 +41,16 @@ const CustomSongModal = (props) => {
             Upload your own midi file, try google midi to find them
           </Modal.Title>
         </Modal.Header>
-        <Modal.Body>
+        <Modal.Body
+          style={{ display: "flex", justifyContent: "space-between" }}
+        >
           <UploadMidi
             setSong={setSong}
             audioContext={audioContext}
             player={player}
             setMuteTracks={setMuteTracks}
             stopPlaying={stopPlaying}
+            setSelectedTrack={setSelectedTrack}
           />
           <InstrumentOptions
             setMuteTracks={setMuteTracks}
@@ -94,7 +106,14 @@ export const ParseMidi = (midi, player, audioContext) => {
 };
 
 const UploadMidi = (props) => {
-  const { player, audioContext, setSong, setMuteTracks, stopPlaying } = props;
+  const {
+    player,
+    audioContext,
+    setSong,
+    setMuteTracks,
+    stopPlaying,
+    setSelectedTrack,
+  } = props;
 
   const [currentMidi, setCurrentMidi] = useState(null); // this is original midi
   const fileSelectRef = useRef(null); // This is used to reset the file after uploading
@@ -119,16 +138,16 @@ const UploadMidi = (props) => {
     setSong(ParseMidi(currentMidi, player, audioContext));
     const muteTracks = new Array(currentMidi.tracks.length + 1); // last element for percussions
     muteTracks.fill(false);
+    muteTracks[0] = true;
     setMuteTracks(muteTracks);
     setCurrentMidi(null);
+    setSelectedTrack(currentMidi.tracks[0]);
     fileSelectRef.current.value = null; // clear the file so every upload is new
   }, [currentMidi, fileSelectRef, player, audioContext]);
 
   return (
     <div>
-      <Button onClick={() => fileSelectRef.current.click()}>
-        Upload a new midi
-      </Button>
+      <Button onClick={() => fileSelectRef.current.click()}>Upload midi</Button>
       <input
         type="file"
         onChange={selectFile}
@@ -212,7 +231,7 @@ const InstrumentOptions = (props) => {
     </Button>
   ));
   return (
-    <>
+    <div>
       <Button variant="primary" onClick={handleShow}>
         Track Options
       </Button>
@@ -254,6 +273,6 @@ const InstrumentOptions = (props) => {
           </Button>
         </Modal.Body>
       </Modal>
-    </>
+    </div>
   );
 };
