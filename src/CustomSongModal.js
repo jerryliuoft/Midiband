@@ -29,7 +29,7 @@ const CustomSongModal = (props) => {
       <Modal show={show} onHide={handleClose}>
         <Modal.Header closeButton>
           <Modal.Title>
-            Upload your own midi file, try google midi to find them{" "}
+            Upload your own midi file, try google midi to find them
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -54,6 +54,45 @@ const CustomSongModal = (props) => {
 
 export default CustomSongModal;
 
+// Takes Midi file and convert it to the format we can send it to the envelopes
+export const ParseMidi = (midi, player, audioContext) => {
+  for (let i = 0; i < midi.tracks.length; i++) {
+    let nn = player.loader.findInstrument(midi.tracks[i].program);
+    let info = player.loader.instrumentInfo(nn);
+    midi.tracks[i].info = info; // this is mutating state, but its fine because i'm setting state at the end to a new variable, and midi is wiped
+    midi.tracks[i].id = nn;
+    player.loader.startLoad(audioContext, info.url, info.variable);
+  }
+  for (let i = 0; i < midi.beats.length; i++) {
+    let nn = player.loader.findDrum(midi.beats[i].n); // n its the percussion type
+    let info = player.loader.drumInfo(nn);
+    midi.beats[i].info = info;
+    midi.beats[i].id = nn;
+    player.loader.startLoad(audioContext, info.url, info.variable);
+  }
+
+  // Create "beat sheet for the tracks"
+  const timeGap = 0.1; //seconds
+  for (let i = 0; i < midi.tracks.length; i += 1) {
+    let sheet = new Array(Math.ceil(midi.duration / timeGap));
+    sheet.fill(".");
+    for (let j = 0; j < midi.tracks[i].notes.length; j += 1) {
+      const when = midi.tracks[i].notes[j].when;
+      sheet[Math.floor(when / timeGap)] = "|";
+    }
+    midi.tracks[i].sheet = sheet;
+  }
+
+  player.loader.waitLoad(function () {
+    audioContext.resume(); // it gets paused sometimes
+    console.log("Finished loading instruments");
+  });
+  audioContext.resume(); // on reload midi, ^ might not run cuz there's no more instrument to load
+
+  console.log(JSON.stringify(midi));
+  return midi;
+};
+
 const UploadMidi = (props) => {
   const { player, audioContext, setSong, setMuteTracks, stopPlaying } = props;
 
@@ -76,44 +115,11 @@ const UploadMidi = (props) => {
     if (currentMidi === null || !fileSelectRef) {
       return;
     }
-    for (let i = 0; i < currentMidi.tracks.length; i++) {
-      let nn = player.loader.findInstrument(currentMidi.tracks[i].program);
-      let info = player.loader.instrumentInfo(nn);
-      currentMidi.tracks[i].info = info; // this is mutating state, but its fine because i'm setting state at the end to a new variable, and currentmidi is wiped
-      currentMidi.tracks[i].id = nn;
-      player.loader.startLoad(audioContext, info.url, info.variable);
-    }
-    for (let i = 0; i < currentMidi.beats.length; i++) {
-      let nn = player.loader.findDrum(currentMidi.beats[i].n); // n its the percussion type
-      let info = player.loader.drumInfo(nn);
-      currentMidi.beats[i].info = info;
-      currentMidi.beats[i].id = nn;
-      player.loader.startLoad(audioContext, info.url, info.variable);
-    }
 
-    // Create "beat sheet for the tracks"
-    const timeGap = 0.1; //seconds
-    for (let i = 0; i < currentMidi.tracks.length; i += 1) {
-      let sheet = new Array(Math.ceil(currentMidi.duration / timeGap));
-      sheet.fill(".");
-      for (let j = 0; j < currentMidi.tracks[i].notes.length; j += 1) {
-        const when = currentMidi.tracks[i].notes[j].when;
-        sheet[Math.floor(when / timeGap)] = "|";
-      }
-      currentMidi.tracks[i].sheet = sheet;
-    }
-
-    player.loader.waitLoad(function () {
-      audioContext.resume(); // it gets paused sometimes
-      console.log("Finished loading instruments");
-    });
-    audioContext.resume(); // on reload midi, ^ might not run cuz there's no more instrument to load
-
-    setSong(currentMidi);
+    setSong(ParseMidi(currentMidi, player, audioContext));
     const muteTracks = new Array(currentMidi.tracks.length + 1); // last element for percussions
     muteTracks.fill(false);
     setMuteTracks(muteTracks);
-    console.log({ currentMidi });
     setCurrentMidi(null);
     fileSelectRef.current.value = null; // clear the file so every upload is new
   }, [currentMidi, fileSelectRef, player, audioContext]);
@@ -168,7 +174,9 @@ const AddATrack = (props) => {
       </Button>
       <Modal show={show} onHide={handleClose}>
         <Modal.Header closeButton>
-          <Modal.Title>Enable/disable playback</Modal.Title>
+          <Modal.Title>
+            Click on the instrument you would like to play
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body>{instrumentButtons}</Modal.Body>
       </Modal>

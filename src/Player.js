@@ -3,8 +3,11 @@ import "bootswatch/dist/slate/bootstrap.min.css"; // bootswatch theme
 import WebAudioFontPlayer from "webaudiofont";
 
 import Button from "react-bootstrap/Button";
-
+import Image from "react-bootstrap/Image";
 import CustomSongModal from "./CustomSongModal";
+import { ParseMidi } from "./CustomSongModal";
+
+import sampleSong from "./midis/bluejam";
 
 const App = () => {
   const [song, setSong] = useState(null); // this is currentMidi with instrument info added
@@ -40,6 +43,21 @@ const App = () => {
   };
   useEffect(initAudio, []);
 
+  // This will load the sample musics, I know this is disgusting hardcoded, but I don't know how to make it better
+  const initSampleSongs = () => {
+    if (!audioContext || !player) {
+      return;
+    }
+    setSong(ParseMidi(sampleSong, player, audioContext));
+    const userTrackId = 0; // hard coding this
+    const muteTracks = new Array(sampleSong.tracks.length + 1); // last element for percussions
+    muteTracks.fill(false);
+    muteTracks[userTrackId] = true;
+    setMuteTracks(muteTracks);
+    setSelectedTrack(sampleSong.tracks[userTrackId]);
+  };
+  useEffect(initSampleSongs, [audioContext, player]);
+
   const stopPlaying = () => {
     setStartPlaying(false);
     setSongTime(0);
@@ -48,17 +66,24 @@ const App = () => {
   return (
     <div>
       <div style={{ textAlign: "center" }}>
-        <CustomSongModal
-          setSong={setSong}
-          audioContext={audioContext}
-          player={player}
-          setMuteTracks={setMuteTracks}
-          stopPlaying={stopPlaying}
-          song={song}
-          muteTracks={muteTracks}
-          setTrack={setTrack}
-        />
-        {startPlaying && <Button onClick={stopPlaying}>Stop playing</Button>}
+        <div>
+          <CustomSongModal
+            setSong={setSong}
+            audioContext={audioContext}
+            player={player}
+            setMuteTracks={setMuteTracks}
+            stopPlaying={stopPlaying}
+            song={song}
+            muteTracks={muteTracks}
+            setTrack={setTrack}
+          />
+          {startPlaying && (
+            <Button style={{ marginLeft: "1em" }} onClick={stopPlaying}>
+              Stop playing
+            </Button>
+          )}
+        </div>
+        <br />
         <PlaySong
           startPlaying={startPlaying}
           song={song}
@@ -130,13 +155,17 @@ const UserControl = (props) => {
 
     if (noteIdx >= track.notes.length - 1) {
       setNoteIdx(0);
+      return;
     }
 
     let currentTime = track.notes[noteIdx].when;
     const envContainer = [];
     let curNoteIdx = noteIdx;
     // the while loops it to play chords if multiple notes are firing at the same time
-    while (currentTime === track.notes[curNoteIdx].when) {
+    while (
+      track.notes[curNoteIdx] &&
+      currentTime === track.notes[curNoteIdx].when
+    ) {
       const envelope = player.queueWaveTable(
         audioContext,
         input,
@@ -162,15 +191,6 @@ const UserControl = (props) => {
     }
   };
 
-  const fastForwardNoteIdxToPlayTime = () => {
-    let nextNote = noteIdx;
-
-    while (track.notes[nextNote].when < songTime) {
-      nextNote += 1;
-    }
-    setNoteIdx(nextNote);
-  };
-
   const noselect = {
     "-webkit-touch-callout": "none" /* iOS Safari */,
     "-webkit-user-select": "none" /* Safari */,
@@ -183,26 +203,26 @@ const UserControl = (props) => {
   };
   return (
     <div>
-      <Button
+      <div
         style={{
-          width: "90%",
-          height: "10em",
-          marginLeft: "1em",
-          marginRight: "1em",
+          width: "100%",
+          height: "50em",
           marginBottom: "1em",
         }}
-        variant="outline-info"
         className={noselect}
         onMouseDown={playNote}
         onTouchStart={playNote}
         onMouseUp={stopNote}
         onTouchEnd={stopNote}
       >
-        {tickDisplay}
-      </Button>
-      <Button onClick={() => fastForwardNoteIdxToPlayTime()}>
-        Press me if you are out of sync
-      </Button>
+        <div>
+          <Image
+            fluid
+            src="https://media1.tenor.com/images/4fbdf5a686e9c241e8f56d06c8902241/tenor.gif?itemid=17529094"
+          />
+          <h4 style={{ marginTop: "1em" }}>Press anywhere</h4>
+        </div>
+      </div>
     </div>
   );
 };
@@ -235,7 +255,7 @@ const PlaySong = (props) => {
   };
 
   const play = () => {
-    if (song === null) {
+    if (song === null || !audioContext) {
       console.log("not ready");
       return;
     }
@@ -269,11 +289,6 @@ const PlaySong = (props) => {
     if (songStart === 0) {
       return; // play hasn't been pressed yet
     }
-
-    if (currentTime >= songStart + song.duration) {
-      stopPlay();
-      return;
-    }
     if (currentTime > nextStepTime - stepDuration) {
       sendNotes(
         song,
@@ -284,6 +299,13 @@ const PlaySong = (props) => {
       );
       setCurrentSongTime((prev) => prev + stepDuration);
       setNextStepTime((prev) => prev + stepDuration);
+      if (currentSongTime > song.duration) {
+        const nextCurrentSongTime = currentSongTime - song.duration;
+        setCurrentSongTime(nextCurrentSongTime);
+        sendNotes(song, songStart, 0, nextCurrentSongTime, player);
+        const nextSongStart = songStart + song.duration;
+        setSongStart(nextSongStart);
+      }
     }
     setSongTime(currentSongTime.toFixed(2));
   };
