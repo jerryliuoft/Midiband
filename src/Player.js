@@ -50,11 +50,6 @@ const App = () => {
   };
   useEffect(initSampleSongs, [audioContext, player]);
 
-  const stopPlaying = () => {
-    setStartPlaying(false);
-    setSongTime(0);
-  };
-
   return (
     <div>
       <div style={{ textAlign: "center" }}>
@@ -64,16 +59,10 @@ const App = () => {
             audioContext={audioContext}
             player={player}
             setMuteTracks={setMuteTracks}
-            stopPlaying={stopPlaying}
             song={song}
             muteTracks={muteTracks}
             setSelectedTrack={setSelectedTrack}
           />
-          {startPlaying && (
-            <Button style={{ marginLeft: "1em" }} onClick={stopPlaying}>
-              Stop playing
-            </Button>
-          )}
         </div>
         <br />
         <PlaySong
@@ -213,6 +202,9 @@ const UserControl = (props) => {
             src="https://media1.tenor.com/images/4fbdf5a686e9c241e8f56d06c8902241/tenor.gif?itemid=17529094"
           />
           <h4 style={{ marginTop: "1em" }}>Press anywhere</h4>
+          <h6 style={{ marginTop: "1em" }}>
+            and keep on pressing to chill with the beats
+          </h6>
         </div>
       </div>
     </div>
@@ -239,45 +231,111 @@ const PlaySong = (props) => {
 
   const stepDuration = 44 / 1000; // 44ms notes to play;
 
-  const stopPlay = () => {
-    clearInterval(playing);
-    player.cancelQueue(audioContext); // this stops anything that's already playing
-    setPlaying(false);
-    setSongStart(0);
-  };
+  // const stopPlay = () => {
+  //   if (songStart === 0 && !playing) {
+  //     return;
+  //   }
 
-  const play = () => {
-    if (song === null || !audioContext) {
-      console.log("not ready");
-      return;
-    }
-    if (playing) {
-      stopPlay();
-    }
-    console.log("Playing");
-
-    setSongStart(audioContext.currentTime);
-    setCurrentSongTime(0);
-    setNextStepTime(audioContext.currentTime);
-    setCurrentTime(audioContext.currentTime);
-    const playingId = setInterval(() => {
-      setCurrentTime(audioContext.currentTime);
-    }, 44);
-    setPlaying(playingId);
-  };
+  //   clearInterval(playing);
+  //   player.cancelQueue(audioContext); // this stops anything that's already playing
+  //   setPlaying(false);
+  //   setSongStart(0);
+  // };
+  // useEffect(stopPlay, [
+  //   playing,
+  //   player,
+  //   setPlaying,
+  //   setSongStart,
+  //   audioContext,
+  //   songStart,
+  // ]);
 
   // use props to trigger if we should play the song or not
   useEffect(() => {
+    const play = () => {
+      if (song === null || !audioContext) {
+        console.log("not ready");
+        return;
+      }
+      console.log("Playing");
+
+      setSongStart(audioContext.currentTime + 0.001);
+      setCurrentSongTime(0);
+      setNextStepTime(audioContext.currentTime);
+      setCurrentTime(audioContext.currentTime);
+      const playingId = setInterval(() => {
+        setCurrentTime(audioContext.currentTime);
+      }, 44);
+      setPlaying(playingId);
+    };
+
     if (startPlaying) {
       play();
-    } else {
-      if (playing) {
-        stopPlay();
-      }
     }
-  }, [startPlaying]);
+  }, [startPlaying, audioContext, song]);
 
   const songLoop = () => {
+    // Helper to play the note at certain time frame, we can't load all of the notes at once because it won't play either memory issue or w/e
+    // so work around is to just play them one time frame at a time.
+    const sendNotes = (song, songStart, start, end, player) => {
+      for (let t = 0; t < song.tracks.length; t++) {
+        const track = song.tracks[t];
+
+        if (muteTracks[t]) {
+          continue;
+        }
+
+        for (let i = 0; i < track.notes.length; i++) {
+          // this can probably be optimized by poping already played notes so don't have to loop through them all the time, welp next time
+          if (track.notes[i].when >= start && track.notes[i].when < end) {
+            const when = songStart + track.notes[i].when;
+            let duration = track.notes[i].duration;
+            if (duration > 3) {
+              duration = 3;
+            }
+            const instr = track.info.variable;
+            const v = track.volume / 7;
+
+            player.queueWaveTable(
+              audioContext,
+              input,
+              window[instr], // window contains all the zone information for the instruments, seems to be configs to make it sound better, it is populated during loading
+              when,
+              track.notes[i].pitch,
+              duration,
+              v,
+              track.notes[i].slides
+            );
+          }
+        }
+      }
+      if (muteTracks[muteTracks.length - 1]) {
+        // last element marks percussion, if true we don't do any percussions
+        return;
+      }
+      // same as above but for beats
+      for (let b = 0; b < song.beats.length; b++) {
+        const beat = song.beats[b];
+        for (let i = 0; i < beat.notes.length; i++) {
+          if (beat.notes[i].when >= start && beat.notes[i].when < end) {
+            const when = songStart + beat.notes[i].when;
+            const duration = 1.5;
+            const instr = beat.info.variable;
+            const v = beat.volume / 2;
+            player.queueWaveTable(
+              audioContext,
+              input,
+              window[instr],
+              when,
+              beat.n,
+              duration,
+              v
+            );
+          }
+        }
+      }
+    };
+
     if (songStart === 0) {
       return; // play hasn't been pressed yet
     }
@@ -302,73 +360,19 @@ const PlaySong = (props) => {
     setSongTime(currentSongTime.toFixed(2));
   };
   useEffect(songLoop, [
+    audioContext,
+    input,
+    muteTracks,
     song,
     songStart,
     nextStepTime,
     currentSongTime,
     currentTime,
+    player,
+    setSongTime,
+    stepDuration,
+    playing,
   ]);
-
-  // Helper to play the note at certain time frame, we can't load all of the notes at once because it won't play either memory issue or w/e
-  // so work around is to just play them one time frame at a time.
-  const sendNotes = (song, songStart, start, end, player) => {
-    for (let t = 0; t < song.tracks.length; t++) {
-      const track = song.tracks[t];
-
-      if (muteTracks[t]) {
-        continue;
-      }
-
-      for (let i = 0; i < track.notes.length; i++) {
-        // this can probably be optimized by poping already played notes so don't have to loop through them all the time, welp next time
-        if (track.notes[i].when >= start && track.notes[i].when < end) {
-          const when = songStart + track.notes[i].when;
-          let duration = track.notes[i].duration;
-          if (duration > 3) {
-            duration = 3;
-          }
-          const instr = track.info.variable;
-          const v = track.volume / 7;
-
-          player.queueWaveTable(
-            audioContext,
-            input,
-            window[instr], // window contains all the zone information for the instruments, seems to be configs to make it sound better, it is populated during loading
-            when,
-            track.notes[i].pitch,
-            duration,
-            v,
-            track.notes[i].slides
-          );
-        }
-      }
-    }
-    if (muteTracks[muteTracks.length - 1]) {
-      // last element marks percussion, if true we don't do any percussions
-      return;
-    }
-    // same as above but for beats
-    for (let b = 0; b < song.beats.length; b++) {
-      const beat = song.beats[b];
-      for (let i = 0; i < beat.notes.length; i++) {
-        if (beat.notes[i].when >= start && beat.notes[i].when < end) {
-          const when = songStart + beat.notes[i].when;
-          const duration = 1.5;
-          const instr = beat.info.variable;
-          const v = beat.volume / 2;
-          player.queueWaveTable(
-            audioContext,
-            input,
-            window[instr],
-            when,
-            beat.n,
-            duration,
-            v
-          );
-        }
-      }
-    }
-  };
 
   if (song === null) {
     return <p>no song selected</p>;

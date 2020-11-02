@@ -11,7 +11,6 @@ const CustomSongModal = (props) => {
     audioContext,
     player,
     setMuteTracks,
-    stopPlaying,
     song,
     muteTracks,
     setSelectedTrack,
@@ -49,7 +48,6 @@ const CustomSongModal = (props) => {
             audioContext={audioContext}
             player={player}
             setMuteTracks={setMuteTracks}
-            stopPlaying={stopPlaying}
             setSelectedTrack={setSelectedTrack}
           />
           <InstrumentOptions
@@ -101,7 +99,7 @@ export const ParseMidi = (midi, player, audioContext) => {
   });
   audioContext.resume(); // on reload midi, ^ might not run cuz there's no more instrument to load
 
-  console.log(JSON.stringify(midi));
+  // console.log(JSON.stringify(midi));
   return midi;
 };
 
@@ -111,7 +109,6 @@ const UploadMidi = (props) => {
     audioContext,
     setSong,
     setMuteTracks,
-    stopPlaying,
     setSelectedTrack,
   } = props;
 
@@ -120,7 +117,6 @@ const UploadMidi = (props) => {
 
   const selectFile = async (e) => {
     e.preventDefault();
-    stopPlaying();
     const reader = new FileReader();
     reader.onload = async (e) => {
       const midi = new MIDIFile(e.target.result);
