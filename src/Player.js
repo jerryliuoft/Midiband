@@ -6,8 +6,9 @@ import Button from "react-bootstrap/Button";
 import Image from "react-bootstrap/Image";
 import CustomSongModal from "./CustomSongModal";
 import { ParseMidi } from "./CustomSongModal";
+import Girl from "./girl.gif";
 
-import sampleSong from "./midis/bluejam";
+import sampleSong from "./midis/morninglofi";
 
 const App = () => {
   const [song, setSong] = useState(null); // this is currentMidi with instrument info added
@@ -197,14 +198,12 @@ const UserControl = (props) => {
         onTouchEnd={stopNote}
       >
         <div>
-          <Image
-            fluid
-            src="https://media1.tenor.com/images/4fbdf5a686e9c241e8f56d06c8902241/tenor.gif?itemid=17529094"
-          />
+          <Image fluid src={Girl} />
           <h4 style={{ marginTop: "1em" }}>Press anywhere</h4>
-          <h6 style={{ marginTop: "1em" }}>
-            and keep on pressing to chill with the beats
-          </h6>
+          <h6 style={{ marginTop: "1em" }}>Try press few more times~</h6>
+          <small>
+            No sound? Increase volume and check your iphone is not on silent
+          </small>
         </div>
       </div>
     </div>

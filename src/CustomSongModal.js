@@ -37,7 +37,7 @@ const CustomSongModal = (props) => {
       <Modal show={show} onHide={handleClose}>
         <Modal.Header closeButton>
           <Modal.Title>
-            Upload your own midi file, try google midi to find them
+            Change the music by uploading, try google midi to find them
           </Modal.Title>
         </Modal.Header>
         <Modal.Body
@@ -57,6 +57,9 @@ const CustomSongModal = (props) => {
           />
           <AddATrack song={song} setTrack={setTrack} />
         </Modal.Body>
+        <Modal.Footer>
+          <a href="https://github.com/jerryliuoft/Midiband">source code</a>
+        </Modal.Footer>
       </Modal>
     </>
   );
